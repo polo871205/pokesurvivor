@@ -54,7 +54,7 @@ def build():
     (SITE/'js').mkdir(exist_ok=True)
     (SITE/'js'/'private-game.js').write_text('\n;\n'.join(output_js)+'\n', encoding='utf-8')
 
-    html = dev[:a] + '<script defer src="js/private-game.js?v=private-v1"></script>' + dev[b+len(END):]
+    html = dev[:a] + '<script defer src="js/private-game.js?v=private-v2"></script>' + dev[b+len(END):]
     html = html.replace('<title>PokéSurvivor –', '<title>PokéSurvivor 私人版 –')
     html = html.replace('content="PokéSurvivor"', 'content="PS私人版"')
     html = re.sub(r'<link rel="canonical"[^>]*>\s*', '', html)
@@ -71,7 +71,7 @@ def build():
     manifest.update(name='PokéSurvivor 私人版', short_name='PS私人版',
                     description='非官方、個人非商業用 iPhone 本機金手指修改版', lang='zh-TW')
     (SITE/'manifest.webmanifest').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
-    (SITE/'version.json').write_text(json.dumps({'v':'private-v1.0','private':True}), encoding='utf-8')
+    (SITE/'version.json').write_text(json.dumps({'v':'private-v2.0','private':True}), encoding='utf-8')
 
     # Keep upstream fetch cache strategy and eagerly cache our ENTIRE core executable.
     sw = (ROOT/'sw.js').read_text('utf-8')
@@ -80,10 +80,10 @@ def build():
         raise SystemExit('上游 sw.js 已變更，請重新檢查離線預載邏輯。')
     sw = sw.replace(original,
           "['./', './index.html', './css/style.css', './manifest.webmanifest', './js/private-game.js']")
-    sw = sw.replace("'ps-code-v1'", "'ps-private-code-v1'").replace("'ps-art-v1'", "'ps-private-art-v1'")
+    sw = sw.replace("'ps-code-v1'", "'ps-private-code-v2'").replace("'ps-art-v1'", "'ps-private-art-v1'")
     (SITE/'sw.js').write_text(sw, encoding='utf-8')
     print('私人版建置完成：' + str(SITE))
-    print('包含 iPhone PWA 本機版、5 項金手指、離線核心檔案及原作者授權署名。')
+    print('包含 iPhone PWA 本機版、可調經驗倍率、自訂金幣及 3 項金手指、離線核心檔案及原作者授權署名。')
     print('警告：未預先快取的全部精靈圖片，離線時不保證可顯示。')
 
 if __name__ == '__main__': build()
