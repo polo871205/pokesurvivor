@@ -1,8 +1,8 @@
 /*
- * PokéSurvivor PRIVATE Traditional Chinese UI layer — V2.3 (shop/settings + dynamic content refresh)
+ * PokéSurvivor PRIVATE Traditional Chinese UI layer — V2.4 (all Pokédex names via build-time PokéAPI mapping)
  * Noncommercial derivative. Upstream game logic, save keys, data IDs stay unchanged.
  * This file translates only visible UI text and common proper names.
- * It is NOT a complete Pokédex/move/quest translation.
+ * Names are mapped by National Dex number; move and quest translations remain partial.
  */
 (() => {
   'use strict';
@@ -316,7 +316,20 @@
     'Start': '開始', 'Save': '儲存', 'Cancel': '取消'
   };
   const dict = new Map([...Object.entries(words), ...Object.entries(english), ...Object.entries(screenWords), ...Object.entries(screenWordsV23)]);
-  const templated = [
+// Merge all source Pokédex names with their Taiwan Traditional Chinese names.
+// Critical: do not alter G.DEX itself, Pokémon IDs, save data, or asset filenames.
+const gameDex = (typeof G !== 'undefined' && Array.isArray(G.DEX)) ? G.DEX : [];
+const namesByDex = (typeof globalThis !== 'undefined' && globalThis.PS_PRIVATE_DEX_ZH) || {};
+let dexNamesAdded = 0;
+for (const pokemon of gameDex) {
+  const translated = namesByDex[String(pokemon.dex)];
+  if (typeof translated === 'string' && translated.trim() && typeof pokemon.name === 'string') {
+    dict.set(pokemon.name, translated);
+    dexNamesAdded += 1;
+  }
+}
+const templated = [
+
     [/^¡Nivel\s+(\d+)！?$/i, n => `等級 ${n}！`],
     [/^Nivel\s+(\d+)$/i, n => `等級 ${n}`],
     [/^Cambiar opciones\s*\(([^)]+)\)/i, n => `重新抽選（${n}）`],
@@ -453,5 +466,5 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
     else start();
   }
-  if (typeof globalThis !== 'undefined') globalThis.PSPrivateZH = Object.freeze({ translate, count: dict.size, version: '2.3' });
+  if (typeof globalThis !== 'undefined') globalThis.PSPrivateZH = Object.freeze({ translate, count: dict.size, dexNamesAdded, version: '2.4' });
 })();
