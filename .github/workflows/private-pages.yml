@@ -1,0 +1,40 @@
+name: PokéSurvivor 私人版 iPhone 網頁部署
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'private-cheats.js'
+      - 'apply_private.py'
+      - '.github/workflows/private-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: private-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download fork contents
+        uses: actions/checkout@v4
+      - name: Build strictly local-only PWA
+        run: python3 apply_private.py
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Package private website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./_site
+      - name: Publish
+        id: deployment
+        uses: actions/deploy-pages@v4
