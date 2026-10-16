@@ -1,5 +1,5 @@
 /*
- * PokéSurvivor PRIVATE Traditional Chinese UI layer — V2.1 (first translation pass)
+ * PokéSurvivor PRIVATE Traditional Chinese UI layer — V2.2 (screenshots translation supplement)
  * Noncommercial derivative. Upstream game logic, save keys, data IDs stay unchanged.
  * This file translates only visible UI text and common proper names.
  * It is NOT a complete Pokédex/move/quest translation.
@@ -175,6 +175,104 @@
     'Zoroark': '索羅亞克', 'Gardevoir': '沙奈朵', 'Ralts': '拉魯拉絲',
     'Kirlia': '奇魯莉安'
   };
+  // V2.2: untranslated text verified from iPhone screenshots (missions, achievements,
+  // profile, collection, gacha, account, controls, graphics). Only visible text is altered.
+  const screenWords = {
+    // Daily quests and achievements
+    'Diarias': '每日任務',
+    'Semanales': '每週任務',
+    'Encuentra un objeto equipable': '獲得一件可裝備道具',
+    'Aguanta 9 minutos en una run': '在單次冒險中存活 9 分鐘',
+    'Cambiar': '更換',
+    'Coleccionista': '收藏家',
+    'Cien amigos': '百位夥伴',
+    'Maestro Pokémon': '寶可夢大師',
+    'Enciclopedia': '百科全書',
+    'Profesor Pokémon': '寶可夢博士',
+    'Algo brilla': '閃亮的邂逅',
+    'Ten 50 Pokémon.': '擁有 50 隻寶可夢。',
+    'Ten 100 Pokémon.': '擁有 100 隻寶可夢。',
+    'Ten 250 Pokémon.': '擁有 250 隻寶可夢。',
+    'Ten 500 Pokémon.': '擁有 500 隻寶可夢。',
+    'Título: Coleccionista': '稱號：收藏家',
+    'Título: Maestro Pokémon': '稱號：寶可夢大師',
+    // Profile
+    'Título': '稱號',
+    '(sin título)': '（尚無稱號）',
+    'Consigue logros para desbloquear títulos.': '完成成就即可解鎖稱號。',
+    'Ver mi perfil público': '查看我的公開個人資料',
+    // Gacha regions, banners and collection
+    'Kanto': '關都',
+    'Johto': '城都',
+    'Hoenn': '豐緣',
+    'Sinnoh': '神奧',
+    'Teselia': '合眾',
+    'Unova': '合眾',
+    'Kalos': '卡洛斯',
+    'Alola': '阿羅拉',
+    'Galar': '伽勒爾',
+    'Paldea': '帕底亞',
+    'Kanto Misterioso': '神祕關都',
+    'Johto Misterioso': '神祕城都',
+    'Hoenn Misterioso': '神祕豐緣',
+    'Sinnoh Misterioso': '神祕神奧',
+    'Teselia Misteriosa': '神祕合眾',
+    'Kalos Misterioso': '神祕卡洛斯',
+    'Alola Misteriosa': '神祕阿羅拉',
+    'Galar Misterioso': '神祕伽勒爾',
+    'Paldea Misteriosa': '神祕帕底亞',
+    'Los 151 Pokémon de la generación 1. ¡Los legendarios esperan!': '第一世代的 151 隻寶可夢，傳說中的寶可夢正等著你！',
+    'Todos': '全部',
+    'Tengo': '已擁有',
+    'Me faltan': '未擁有',
+    'Legendaria': '傳說',
+    'Legendario': '傳說',
+    'Épica': '史詩',
+    'Épico': '史詩',
+    'Rara': '稀有',
+    'Raro': '稀有',
+    'Común': '普通',
+    'Aún no lo tienes': '尚未擁有',
+    'Aún no la tienes': '尚未擁有',
+    // Account settings
+    'Apodo': '暱稱',
+    'Es único y no se puede cambiar.': '暱稱不可重複，設定後無法變更。',
+    'Tipo de cuenta': '帳號類型',
+    'Cuenta de este navegador': '此瀏覽器的本機帳號',
+    'Partida': '遊戲存檔',
+    'Guardado sólo en este navegador': '僅儲存在此瀏覽器',
+    'Cerrar sesión': '登出',
+    'Borrar cuenta': '刪除帳號',
+    // Control settings
+    'Tamaño del joystick': '虛擬搖桿大小',
+    'Cuánto hay que arrastrar el dedo.': '設定拖曳手指時的搖桿操作範圍。',
+    'Pequeño': '小',
+    'Grande': '大',
+    'Colocar los botones': '調整按鍵位置',
+    'Pon los ataques, la pausa y el joystick (fijo, si quieres) donde quieras de la pantalla.': '將攻擊、暫停及搖桿（可選固定）按鈕放到螢幕上喜歡的位置。',
+    'Colocar': '調整位置',
+    'En PC': '電腦操作',
+    'o flechas': '或方向鍵',
+    'moverse': '移動',
+    // Graphics settings
+    'Calidad': '畫質',
+    'Cuántos efectos y partículas se dibujan. Auto la baja sola si el juego va a tirones (ahora: media).': '調整畫面特效及粒子數量。選擇「自動」時，遊戲卡頓會自動降低畫質（目前：中）。',
+    'Auto': '自動',
+    'Alta': '高',
+    'Media': '中',
+    'Baja': '低',
+    'Pantalla': '畫面',
+    'Números de daño': '傷害數字',
+    'Los números que salen al golpear y al recibir daño.': '攻擊敵人或受到傷害時顯示的數字。',
+    'Menos sacudidas y destellos': '減少畫面晃動與閃光',
+    'La cámara tiembla menos y los fogonazos son suaves.': '減少鏡頭震動，並降低閃光效果的強度。',
+    'Sí': '是',
+    'No': '否',
+    // Common small inline strings
+    'Aún no lo tienes.': '尚未擁有。',
+    'Consíguelo en el banner de Kanto': '在關都卡池中抽取即可獲得',
+    'Consíguelo en el banner de Kanto.': '在關都卡池中抽取即可獲得。',
+  };
   // Some static strings in the source are in English depending on user locale.
   const english = {
     'Play': '開始遊戲', 'Settings': '設定', 'Back': '返回', 'Close': '關閉',
@@ -189,13 +287,23 @@
     'Coins': '金幣', 'Select': '選擇', 'Reroll': '重新抽選',
     'Start': '開始', 'Save': '儲存', 'Cancel': '取消'
   };
-  const dict = new Map([...Object.entries(words), ...Object.entries(english)]);
+  const dict = new Map([...Object.entries(words), ...Object.entries(english), ...Object.entries(screenWords)]);
   const templated = [
     [/^¡Nivel\s+(\d+)！?$/i, n => `等級 ${n}！`],
     [/^Nivel\s+(\d+)$/i, n => `等級 ${n}`],
     [/^Cambiar opciones\s*\(([^)]+)\)/i, n => `重新抽選（${n}）`],
     [/^Gen(?:eración)?\s+(\d+)$/i, n => `第 ${n} 世代`],
-    [/^Nivel\s*\.?\s*(\d+)$/i, n => `等級 ${n}`]
+    [/^Nivel\s*\.?\s*(\d+)$/i, n => `等級 ${n}`],
+    [/^Ten\s+(\d+)\s+Pokémon\.$/i, n => `擁有 ${n} 隻寶可夢。`],
+    [/^Aguanta\s+(\d+)\s+minutos?\s+en\s+una\s+run\.?$/i, n => `在單次冒險中存活 ${n} 分鐘`],
+    [/^Se renuevan en\s+(\d+)\s+d\s+(\d+)\s+h$/i, (d,h) => `距離刷新還有 ${d} 天 ${h} 小時`],
+    [/^Se renuevan en\s+(\d+)\s+h\s+(\d+)\s+min$/i, (h,m) => `距離刷新還有 ${h} 小時 ${m} 分鐘`],
+    [/^Tienes\s+(\d+)\s+de\s+(\d+)$/i, (n,total) => `已擁有 ${n}／${total} 隻`],
+    [/^N[º°]\s*(\d+)\s*[·•-]\s*(.+)$/i, (n,region) => `圖鑑編號 ${n}・${dict.get(region.trim())||region.trim()}`],
+    [/^Título:\s*(.+)$/i, name => `稱號：${dict.get(name.trim())||name.trim()}`],
+    [/^Consíguelo en el banner de (.+?)[.!]?$/i, region => `可從${dict.get(region.trim())||region.trim()}卡池獲得。`],
+    [/^Los\s+(\d+)\s+Pokémon\s+de\s+la\s+generación\s+(\d+)\.\s*¡Los legendarios esperan!$/i, (n,g) => `第 ${g} 世代共 ${n} 隻寶可夢，傳說中的寶可夢正等著你！`],
+    [/^Gen(?:eración)?\s*(\d+)$/i, n => `第 ${n} 世代`]
   ];
 
   function translate(raw) {
@@ -208,6 +316,12 @@
     for (const [rx, fmt] of templated) {
       const match = core.match(rx);
       if (match) return m[1] + fmt(...match.slice(1)) + m[3];
+    }
+    // Achievement reward labels sometimes share a text node with progress counters.
+    if (core.includes('Título: ')) {
+      const next = core.replace(/Título:\s*(Coleccionista|Maestro Pokémon|Profesor Pokémon|Cien amigos|Enciclopedia)/g,
+        (_, name) => '稱號：' + (dict.get(name) || name));
+      if (next !== core) return m[1] + next + m[3];
     }
     // Partial label before a nested count/keyboard hint. Deliberately NOT a
     // global free-text replacement; protects nicknames and game data IDs.
