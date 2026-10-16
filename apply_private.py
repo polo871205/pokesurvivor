@@ -21,7 +21,7 @@ def build():
     if not (ROOT / 'private-cheats.js').is_file():
         raise SystemExit('缺少 private-cheats.js')
     if not (ROOT / 'private-zh-tw.js').is_file():
-        raise SystemExit('缺少 private-zh-tw.js：V2.2 需有此檔案')
+        raise SystemExit('缺少 private-zh-tw.js：V2.3 需有此檔案')
     dev = devpath.read_text(encoding='utf-8')
     a, b = dev.find(BEGIN), dev.find(END)
     if a < 0 or b < a:
@@ -49,7 +49,7 @@ def build():
             # The normal game launcher executes last. The cheat hooks run first.
             output_js.append('/* Force permanently LOCAL database mode */\nG.FIREBASE_CONFIG = null;')
             output_js.append('/* Private features */\n' + (ROOT/'private-cheats.js').read_text('utf-8'))
-            output_js.append('/* Traditional Chinese UI overlay (V2.2 screenshots supplement) */\n' + (ROOT/'private-zh-tw.js').read_text('utf-8'))
+            output_js.append('/* Traditional Chinese UI overlay (V2.3 shop/settings + dynamic content refresh) */\n' + (ROOT/'private-zh-tw.js').read_text('utf-8'))
         path = ROOT / name
         if not path.exists():
             raise SystemExit('缺少上游檔案 ' + name)
@@ -57,7 +57,7 @@ def build():
     (SITE/'js').mkdir(exist_ok=True)
     (SITE/'js'/'private-game.js').write_text('\n;\n'.join(output_js)+'\n', encoding='utf-8')
 
-    html = dev[:a] + '<script defer src="js/private-game.js?v=private-v2-2"></script>' + dev[b+len(END):]
+    html = dev[:a] + '<script defer src="js/private-game.js?v=private-v2-3"></script>' + dev[b+len(END):]
     # Use the source Spanish text as stable keys for the local overlay.
     # This only changes the private site origin; the original game is unaffected.
     html = html.replace('</head>', '<script>try{localStorage.setItem("ps.lang","es")}catch(_){}</script></head>', 1)
@@ -77,7 +77,7 @@ def build():
     manifest.update(name='PokéSurvivor 私人版', short_name='PS私人版',
                     description='非官方、個人非商業用 iPhone 本機金手指修改版', lang='zh-TW')
     (SITE/'manifest.webmanifest').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
-    (SITE/'version.json').write_text(json.dumps({'v':'private-v2.2','private':True}), encoding='utf-8')
+    (SITE/'version.json').write_text(json.dumps({'v':'private-v2.3','private':True}), encoding='utf-8')
 
     # Keep upstream fetch cache strategy and eagerly cache our ENTIRE core executable.
     sw = (ROOT/'sw.js').read_text('utf-8')
@@ -86,10 +86,10 @@ def build():
         raise SystemExit('上游 sw.js 已變更，請重新檢查離線預載邏輯。')
     sw = sw.replace(original,
           "['./', './index.html', './css/style.css', './manifest.webmanifest', './js/private-game.js']")
-    sw = sw.replace("'ps-code-v1'", "'ps-private-code-v2-2'").replace("'ps-art-v1'", "'ps-private-art-v1'")
+    sw = sw.replace("'ps-code-v1'", "'ps-private-code-v2-3'").replace("'ps-art-v1'", "'ps-private-art-v1'")
     (SITE/'sw.js').write_text(sw, encoding='utf-8')
-    print('私人版 V2.2 建置完成：' + str(SITE))
-    print('包含 V2.0 金手指、本機存檔及 V2.2 已確認畫面的繁體中文補充翻譯，保留原作者授權署名。')
+    print('私人版 V2.3 建置完成：' + str(SITE))
+    print('包含 V2.0 金手指、本機存檔及 V2.3 商店與設定畫面的繁體中文增補和動態文字刷新，保留原作者授權署名。')
     print('注意：中文化仍屬逐步補齊，尚未翻譯所有寶可夢、招式與任務文案。')
     print('警告：未預先快取的全部精靈圖片，離線時不保證可顯示。')
 

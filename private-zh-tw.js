@@ -1,5 +1,5 @@
 /*
- * PokéSurvivor PRIVATE Traditional Chinese UI layer — V2.2 (screenshots translation supplement)
+ * PokéSurvivor PRIVATE Traditional Chinese UI layer — V2.3 (shop/settings + dynamic content refresh)
  * Noncommercial derivative. Upstream game logic, save keys, data IDs stay unchanged.
  * This file translates only visible UI text and common proper names.
  * It is NOT a complete Pokédex/move/quest translation.
@@ -273,6 +273,34 @@
     'Consíguelo en el banner de Kanto': '在關都卡池中抽取即可獲得',
     'Consíguelo en el banner de Kanto.': '在關都卡池中抽取即可獲得。',
   };
+  // V2.3 supplement for screenshots of upgrades, game account, controls and graphics.
+  const screenWordsV23 = {
+    // Upgrade names / descriptions
+    'Vitalidad': '生命力',
+    'Fuerza': '力量',
+    'Zancada': '步伐',
+    'Reflejos': '反應',
+    'Coraza': '護甲',
+    'Síntesis': '再生',
+    'Imán': '磁力',
+    'Sabiduría': '智慧',
+    'vida': '生命', 'daño': '傷害', 'velocidad': '移動速度',
+    'recarga': '冷卻時間', 'defensa': '防禦', 'vida/s': '生命／秒',
+    'recogida': '拾取範圍', 'experiencia': '經驗值',
+    // Settings — full phrases or titles appearing in the screenshots
+    'En móvil o tablet': '手機或平板操作',
+    'Pon el dedo en cualquier parte y arrastra para moverte: el joystick aparece donde tocas. Toca un ataque de abajo para cambiarlo y el botón de arriba a la derecha para pausar. Se juega en horizontal.':
+      '在畫面任意位置按住並拖曳即可移動，虛擬搖桿會出現在觸碰的位置。點選下方招式可切換攻擊；點選右上角按鈕可暫停。建議橫向遊玩。',
+    'Idioma': '語言',
+    'El juego se recarga al cambiarlo.': '切換語言後遊戲會重新載入。',
+    'Español': '西班牙文', 'English': '英文',
+    'Cuántos efectos y partículas se dibujan. Auto la baja sola si el juego va a tirones (ahora: media).':
+      '決定特效與粒子顯示數量。選擇自動時，遊戲卡頓會自動降低畫質（目前：中）。',
+    // Extra short labels and pop-up notices
+    '¡Logro: Cien amigos!': '獲得成就：百位夥伴！',
+    '¡Logro: Coleccionista!': '獲得成就：收藏家！',
+    '¡Logro: Maestro Pokémon!': '獲得成就：寶可夢大師！',
+  };
   // Some static strings in the source are in English depending on user locale.
   const english = {
     'Play': '開始遊戲', 'Settings': '設定', 'Back': '返回', 'Close': '關閉',
@@ -287,7 +315,7 @@
     'Coins': '金幣', 'Select': '選擇', 'Reroll': '重新抽選',
     'Start': '開始', 'Save': '儲存', 'Cancel': '取消'
   };
-  const dict = new Map([...Object.entries(words), ...Object.entries(english), ...Object.entries(screenWords)]);
+  const dict = new Map([...Object.entries(words), ...Object.entries(english), ...Object.entries(screenWords), ...Object.entries(screenWordsV23)]);
   const templated = [
     [/^¡Nivel\s+(\d+)！?$/i, n => `等級 ${n}！`],
     [/^Nivel\s+(\d+)$/i, n => `等級 ${n}`],
@@ -303,7 +331,13 @@
     [/^Título:\s*(.+)$/i, name => `稱號：${dict.get(name.trim())||name.trim()}`],
     [/^Consíguelo en el banner de (.+?)[.!]?$/i, region => `可從${dict.get(region.trim())||region.trim()}卡池獲得。`],
     [/^Los\s+(\d+)\s+Pokémon\s+de\s+la\s+generación\s+(\d+)\.\s*¡Los legendarios esperan!$/i, (n,g) => `第 ${g} 世代共 ${n} 隻寶可夢，傳說中的寶可夢正等著你！`],
-    [/^Gen(?:eración)?\s*(\d+)$/i, n => `第 ${n} 世代`]
+    [/^Gen(?:eración)?\s*(\d+)$/i, n => `第 ${n} 世代`],
+    // The shop uses combined text like 'Vitalidad +8 vida'. Keep values as-is.
+    [/^(Vitalidad|Fuerza|Zancada|Reflejos|Coraza|Síntesis|Imán|Sabiduría)\s*([+−-]?[\d.,]+%?)\s*(vida\/s|vida|daño|velocidad|recarga|defensa|recogida|experiencia)$/i,
+      (name,value,unit) => `${dict.get(name)||name} ${value} ${dict.get(unit)||unit}`],
+    [/^¡Logro:\s*(.+)!$/i, title => `獲得成就：${dict.get(title.trim())||title.trim()}！`],
+    [/^\(?ahora:\s*(alta|media|baja)\)?\.?$/i, value => `（目前：${dict.get(value)||value}）`],
+    [/^(\d+(?:[.,]\d+)?)\s*vida\/s$/i, n => `${n} 生命／秒`]
   ];
 
   function translate(raw) {
@@ -317,6 +351,9 @@
       const match = core.match(rx);
       if (match) return m[1] + fmt(...match.slice(1)) + m[3];
     }
+    // Upgrades sometimes share the name and effect in the same text node.
+    const bonus = /^(Vitalidad|Fuerza|Zancada|Reflejos|Coraza|Síntesis|Imán|Sabiduría)\s+([+−-][0-9.,]+%?)\s*(vida\/s|vida|daño|velocidad|recarga|defensa|recogida|experiencia)$/i.exec(core);
+    if (bonus) return m[1] + `${dict.get(bonus[1])||bonus[1]} ${bonus[2]} ${dict.get(bonus[3])||bonus[3]}` + m[3];
     // Achievement reward labels sometimes share a text node with progress counters.
     if (core.includes('Título: ')) {
       const next = core.replace(/Título:\s*(Coleccionista|Maestro Pokémon|Profesor Pokémon|Cien amigos|Enciclopedia)/g,
@@ -396,10 +433,25 @@
       }
       if (!scheduled && tasks.size) { scheduled = true; requestAnimationFrame(flush); }
     }).observe(document.body, { childList: true, characterData: true, subtree: true });
+    // Some game panels regenerate their labels via render/update functions. A
+    // low-frequency visible-panel pass catches those cases without altering
+    // gameplay state, IDs, storage or the gold/EXP calculations.
+    setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      const panels = document.querySelectorAll('section.scr:not(.hidden), #set-body, #topbar:not(.hidden)');
+      if (!panels.length) { update(document.body); return; }
+      for (const panel of panels) update(panel);
+    }, 1200);
+    document.addEventListener('click', () => {
+      setTimeout(() => {
+        const settings = document.getElementById('scr-settings');
+        if (settings && !settings.classList.contains('hidden')) update(settings);
+      }, 80);
+    }, {passive: true});
   }
   if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
     else start();
   }
-  if (typeof globalThis !== 'undefined') globalThis.PSPrivateZH = Object.freeze({ translate, count: dict.size });
+  if (typeof globalThis !== 'undefined') globalThis.PSPrivateZH = Object.freeze({ translate, count: dict.size, version: '2.3' });
 })();
