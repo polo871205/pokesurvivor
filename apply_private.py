@@ -35,7 +35,7 @@ def build_dex_chinese_map():
     if len(dex_by_id) < 900 or len(dex_by_id) != len(entries):
         raise SystemExit(f'圖鑑資料數量異常：{len(entries)} 筆、{len(dex_by_id)} 個不同編號。取消部署。')
     request = urllib.request.Request(
-        POKEAPI_NAMES, headers={'User-Agent':'PokeSurvivor-private-zh-Hant-build/2.6'})
+        POKEAPI_NAMES, headers={'User-Agent':'PokeSurvivor-private-zh-Hant-build/2.7'})
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             content = response.read().decode('utf-8-sig')
@@ -52,7 +52,7 @@ def build_dex_chinese_map():
     print(f'寶可夢繁中名稱比對：{len(result)}/{len(dex_by_id)} 筆；缺漏 0。')
     return result
 
-# V2.6: official move / ability / item names. We do not rewrite gameplay
+# V2.7: official move / ability / item names. We do not rewrite gameplay
 # variables or source names; all mappings are used by the UI-only overlay.
 POKEAPI_CSV_BASE = 'https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv/'
 TERM_TABLES = {
@@ -63,7 +63,7 @@ TERM_TABLES = {
 
 def _download_csv(url):
     request = urllib.request.Request(url, headers={
-        'User-Agent': 'PokeSurvivor-private-zh-Hant-build/2.6'
+        'User-Agent': 'PokeSurvivor-private-zh-Hant-build/2.7'
     })
     with urllib.request.urlopen(request, timeout=45) as response:
         return list(csv.DictReader(io.StringIO(response.read().decode('utf-8-sig'))))
@@ -103,14 +103,14 @@ def build_game_terms():
         try:
             rows = _download_csv(POKEAPI_CSV_BASE + csv_name)
         except Exception as exc:
-            raise SystemExit(f'V2.6 無法取得 {csv_name}，為避免缺漏而停止部署：{exc}')
+            raise SystemExit(f'V2.7 無法取得 {csv_name}，為避免缺漏而停止部署：{exc}')
         terms, stats = _terms_from_rows(rows, id_field)
         # A zero-name result indicates a schema change or upstream outage.
         if len(terms) < 10:
-            raise SystemExit(f'V2.6 {csv_name} 缺少有效的繁中對照，停止部署（{len(terms)} 筆）')
+            raise SystemExit(f'V2.7 {csv_name} 缺少有效的繁中對照，停止部署（{len(terms)} 筆）')
         combined[group] = terms
         report[group] = stats
-        print(f'V2.6 {group}: {stats["localized_entries"]} 個繁中名稱、{stats["name_pairs"]} 組西文/英文對照，跳過 {stats["ambiguous_names_skipped"]} 個衝突名稱')
+        print(f'V2.7 {group}: {stats["localized_entries"]} 個繁中名稱、{stats["name_pairs"]} 組西文/英文對照，跳過 {stats["ambiguous_names_skipped"]} 個衝突名稱')
     return combined, report
 
 # Manually reviewed names that are absent from the downloaded name CSVs, or
@@ -174,6 +174,13 @@ def audit_static_text(official_terms):
     terms = set(_ui_dictionary_keys())
     for names in official_terms.values(): terms.update(names)
     for names in LOCAL_GAME_NAMES.values(): terms.update(names)
+    # Parse the exact literal keys reviewed by the V2.7 display layer.
+    # No extra files are required in the GitHub upload.
+    localized = (ROOT / 'private-zh-tw.js').read_text(encoding='utf8')
+    match = re.search(r'const reviewedTextsV27 = (\{.*?\});\n', localized, flags=re.DOTALL)
+    if not match: raise SystemExit('找不到 V2.7 人工校對翻譯字典，停止部署。')
+    reviewed = json.loads(match.group(1))
+    terms.update(reviewed)
     results = {}
     def category_for(path):
         name = path.name.lower()
@@ -234,6 +241,7 @@ def audit_static_text(official_terms):
             'recognized_in_dictionary':sum(x['status']=='already_matched' for x in items),
             'remaining_for_manual_review':sum(x['status']=='needs_review' for x in items),
             'by_category':by_category,
+            'v27_reviewed_count': len(reviewed),
             'caveat':'靜態字串啟發式掃描，並非完整覆蓋率。可能有偽陽性、HTML 模板或執行時產生的文字未納入。'}, items
 
 def audit_source_names(terms):
@@ -273,7 +281,7 @@ def build():
     if not (ROOT / 'private-cheats.js').is_file():
         raise SystemExit('缺少 private-cheats.js')
     if not (ROOT / 'private-zh-tw.js').is_file():
-        raise SystemExit('缺少 private-zh-tw.js：V2.6 需有此檔案')
+        raise SystemExit('缺少 private-zh-tw.js：V2.7 需有此檔案')
     dev = devpath.read_text(encoding='utf-8')
     a, b = dev.find(BEGIN), dev.find(END)
     if a < 0 or b < a:
@@ -288,6 +296,7 @@ def build():
     terms_zh, term_stats = build_game_terms()
     source_audit = audit_source_names(terms_zh)
     text_audit, text_todo = audit_static_text(terms_zh)
+    reviewed_count = text_audit.get('v27_reviewed_count', 0)
     if SITE.exists(): shutil.rmtree(SITE)
     SITE.mkdir(parents=True)
     # All sprites remain in the private fork. Credits/licenses must be retained.
@@ -306,9 +315,9 @@ def build():
             output_js.append('/* Force permanently LOCAL database mode */\nG.FIREBASE_CONFIG = null;')
             output_js.append('/* Private features */\n' + (ROOT/'private-cheats.js').read_text('utf-8'))
             output_js.append('/* Full national dex Traditional Chinese names (baked at build-time) */\n' + 'globalThis.PS_PRIVATE_DEX_ZH = Object.freeze(' + json.dumps(dex_zh, ensure_ascii=False, separators=(',', ':')) + ');')
-            output_js.append('/* Official PokéAPI localized move/ability/item names (V2.6 build time; no runtime fetch) */\n' + 'globalThis.PS_PRIVATE_TERMS_ZH = Object.freeze(' + json.dumps(terms_zh, ensure_ascii=False, separators=(',', ':')) + ');')
+            output_js.append('/* Official PokéAPI localized move/ability/item names (V2.7 build time; no runtime fetch) */\n' + 'globalThis.PS_PRIVATE_TERMS_ZH = Object.freeze(' + json.dumps(terms_zh, ensure_ascii=False, separators=(',', ':')) + ');')
             output_js.append('/* Verified local names for missing terms */\n' + 'globalThis.PS_PRIVATE_GAME_NAMES_ZH = Object.freeze(' + json.dumps(LOCAL_GAME_NAMES, ensure_ascii=False, separators=(',', ':')) + ');')
-            output_js.append('/* Traditional Chinese UI overlay (V2.6 terms and dex) */\n' + (ROOT/'private-zh-tw.js').read_text('utf-8'))
+            output_js.append('/* Traditional Chinese UI overlay (V2.7 terms and dex) */\n' + (ROOT/'private-zh-tw.js').read_text('utf-8'))
         path = ROOT / name
         if not path.exists():
             raise SystemExit('缺少上游檔案 ' + name)
@@ -316,7 +325,7 @@ def build():
     (SITE/'js').mkdir(exist_ok=True)
     (SITE/'js'/'private-game.js').write_text('\n;\n'.join(output_js)+'\n', encoding='utf-8')
 
-    html = dev[:a] + '<script defer src="js/private-game.js?v=private-v2-6"></script>' + dev[b+len(END):]
+    html = dev[:a] + '<script defer src="js/private-game.js?v=private-v2-7"></script>' + dev[b+len(END):]
     # Use the source Spanish text as stable keys for the local overlay.
     # This only changes the private site origin; the original game is unaffected.
     html = html.replace('</head>', '<script>try{localStorage.setItem("ps.lang","es")}catch(_){}</script></head>', 1)
@@ -336,24 +345,25 @@ def build():
     manifest.update(name='PokéSurvivor 私人版', short_name='PS私人版',
                     description='非官方、個人非商業用 iPhone 本機金手指修改版', lang='zh-TW')
     (SITE/'manifest.webmanifest').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
-    (SITE/'version.json').write_text(json.dumps({'v':'private-v2.6','private':True}), encoding='utf-8')
+    (SITE/'version.json').write_text(json.dumps({'v':'private-v2.7','private':True}), encoding='utf-8')
     (SITE/'translation-report.json').write_text(json.dumps({
-        'version': 'private-v2.6',
+        'version': 'private-v2.7',
         'pokemon_names': len(dex_zh),
         'official_name_tables': term_stats,
         'source_name_audit': source_audit,
         'local_name_overrides': {k: len(v) for k,v in LOCAL_GAME_NAMES.items()},
         'static_text_audit': text_audit,
         'translation_todo_url': 'translation-todo.json',
+        'reviewed_v27_texts': reviewed_count,
         'limitations': [
-            '保留 V2.5 官方名稱對照；新增 14 個確認的遊戲專用名稱，但不是全部名稱。',
-            'V2.6 額外掃描遊戲原始碼的疑似西班牙文敘述並列於 translation-todo.json；報告並未自動將其翻譯。',
+            '保留 V2.5 官方名稱對照及 14 個遊戲專用名稱。V2.7 新增人工校對的靜態顯示文字，並非全部執行時文字。',
+            'V2.7 額外掃描遊戲原始碼的疑似西班牙文敘述並列於 translation-todo.json；報告並未自動將其翻譯。',
             '所有稽核均為啟發式，不代表總遊戲文字覆蓋率；動態組合文字可能未列入。'
         ]
     }, ensure_ascii=False, indent=2), encoding='utf-8')
 
     (SITE/'translation-todo.json').write_text(json.dumps({
-        'version': 'private-v2.6',
+        'version': 'private-v2.7',
         'summary': text_audit,
         'entries': [x for x in text_todo if x['status'] == 'needs_review'],
         'notice': '這是來自公開遊戲原始碼的待檢查清單，並非已自動翻譯的文字。'
@@ -366,11 +376,11 @@ def build():
         raise SystemExit('上游 sw.js 已變更，請重新檢查離線預載邏輯。')
     sw = sw.replace(original,
           "['./', './index.html', './css/style.css', './manifest.webmanifest', './js/private-game.js']")
-    sw = sw.replace("'ps-code-v1'", "'ps-private-code-v2-6'").replace("'ps-art-v1'", "'ps-private-art-v1'")
+    sw = sw.replace("'ps-code-v1'", "'ps-private-code-v2-7'").replace("'ps-art-v1'", "'ps-private-art-v1'")
     (SITE/'sw.js').write_text(sw, encoding='utf-8')
-    print('私人版 V2.6 建置完成：' + str(SITE))
-    print('保留原本金手指與本機存檔；新增 14 個名稱的覆蓋及原始碼待翻譯清單 translation-todo.json。')
-    print('注意：效果描述、任務、成就仍非全部中文化；詳見 translation-todo.json。')
+    print('私人版 V2.7 建置完成：' + str(SITE))
+    print('保留原本金手指與本機存檔；新增 V2.7 人工校對的靜態文字對照及剩餘待翻譯清單。')
+    print('注意：部分效果描述、任務與成就已新增中文，但動態內容仍可能缺漏；詳見 translation-todo.json。')
     print('警告：未預先快取的全部精靈圖片，離線時不保證可顯示。')
 
 if __name__ == '__main__': build()
