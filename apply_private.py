@@ -2,7 +2,7 @@
 """Build private, local-only PokéSurvivor Pages site from an upstream fork.
 
 Usage: python3 apply_private.py
-Output: ./_site/ (for GitHub Pages). Build-time PokeAPI CSV access required.
+Output: ./_site/ (for GitHub Pages). Build-time PokéAPI CSV access required.
 """
 from __future__ import annotations
 import csv
@@ -35,7 +35,7 @@ def build_dex_chinese_map():
     if len(dex_by_id) < 900 or len(dex_by_id) != len(entries):
         raise SystemExit(f'圖鑑資料數量異常：{len(entries)} 筆、{len(dex_by_id)} 個不同編號。取消部署。')
     request = urllib.request.Request(
-        POKEAPI_NAMES, headers={'User-Agent':'PokeSurvivor-private-zh-Hant-build/2.5'})
+        POKEAPI_NAMES, headers={'User-Agent':'PokeSurvivor-private-zh-Hant-build/2.6'})
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             content = response.read().decode('utf-8-sig')
@@ -52,7 +52,7 @@ def build_dex_chinese_map():
     print(f'寶可夢繁中名稱比對：{len(result)}/{len(dex_by_id)} 筆；缺漏 0。')
     return result
 
-# V2.5: official move / ability / item names. We do not rewrite gameplay
+# V2.6: official move / ability / item names. We do not rewrite gameplay
 # variables or source names; all mappings are used by the UI-only overlay.
 POKEAPI_CSV_BASE = 'https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv/'
 TERM_TABLES = {
@@ -63,7 +63,7 @@ TERM_TABLES = {
 
 def _download_csv(url):
     request = urllib.request.Request(url, headers={
-        'User-Agent': 'PokeSurvivor-private-zh-Hant-build/2.5'
+        'User-Agent': 'PokeSurvivor-private-zh-Hant-build/2.6'
     })
     with urllib.request.urlopen(request, timeout=45) as response:
         return list(csv.DictReader(io.StringIO(response.read().decode('utf-8-sig'))))
@@ -103,15 +103,138 @@ def build_game_terms():
         try:
             rows = _download_csv(POKEAPI_CSV_BASE + csv_name)
         except Exception as exc:
-            raise SystemExit(f'V2.5 無法取得 {csv_name}，為避免缺漏而停止部署：{exc}')
+            raise SystemExit(f'V2.6 無法取得 {csv_name}，為避免缺漏而停止部署：{exc}')
         terms, stats = _terms_from_rows(rows, id_field)
         # A zero-name result indicates a schema change or upstream outage.
         if len(terms) < 10:
-            raise SystemExit(f'V2.5 {csv_name} 缺少有效的繁中對照，停止部署（{len(terms)} 筆）')
+            raise SystemExit(f'V2.6 {csv_name} 缺少有效的繁中對照，停止部署（{len(terms)} 筆）')
         combined[group] = terms
         report[group] = stats
-        print(f'V2.5 {group}: {stats["localized_entries"]} 個繁中名稱、{stats["name_pairs"]} 組西文/英文對照，跳過 {stats["ambiguous_names_skipped"]} 個衝突名稱')
+        print(f'V2.6 {group}: {stats["localized_entries"]} 個繁中名稱、{stats["name_pairs"]} 組西文/英文對照，跳過 {stats["ambiguous_names_skipped"]} 個衝突名稱')
     return combined, report
+
+# Manually reviewed names that are absent from the downloaded name CSVs, or
+# belong to this fan game's own upgrade/card vocabulary. Keys are DISPLAY
+# text only; do not write them back to gameplay data structures.
+LOCAL_GAME_NAMES = {
+    'moves': {'Foco Resplandor': '加農光炮'},
+    'abilities': {},
+    'items': {
+        'Banda Focus': '氣勢披帶',
+        'Cambio de cartas': '更換卡牌',
+        'Coraza': '護甲',
+        'Fortuna': '幸運',
+        'Fuerza': '力量',
+        'Golpe Crítico': '暴擊',
+        'Reflejos': '反應速度',
+        'Repertorio': '技能庫',
+        'Sabiduría': '智慧',
+        'Síntesis': '再生',  # shop upgrade; a move with this name means Synthesis
+        'Veto': '排除',
+        'Vitalidad': '生命力',
+        'Zancada': '移動速度',
+    },
+}
+
+# Static-code review only: no write to game JS files, and does not inspect
+# users' saved data. Detects literals from public JS checked out at build time.
+TEXT_FIELD = re.compile(
+    r"(?<![\w$])(?:description|descripcion|descripción|desc|effect|efecto|"
+    r"tooltip|objective|objetivo|message|mensaje|text|texto|hint|subtitle|"
+    r"label|title|titulo|título|help|summary)\s*:\s*(['\"])((?:\\.|(?!\1)[^\r\n]){3,320})\1",
+    re.IGNORECASE,
+)
+UI_STRING = re.compile(r"(['\"])((?:\\.|(?!\1)[^\r\n]){8,260})\1")
+SPANISH_WORDS = re.compile(r'\b(?:el|la|los|las|un|una|del|para|por|con|sin|que|cuando|cada|'
+                           r'aumenta|reduce|recupera|obtén|consigue|tienes|durante|tiempo|'
+                           r'ataque|daño|habilidad|objeto|recompensa|nivel|vida|movimiento|'
+                           r'enemigos|elegir|recibe|daños|derrota|enemigo|crítico)\b', re.I)
+
+def _candidate_text(value):
+    value = value.strip().replace('\\n', ' ').replace('\\t', ' ')
+    if not (6 <= len(value) <= 240): return None
+    if '${' in value or '<' in value or '>' in value or '\\x' in value or '\\u' in value:
+        return None
+    if '://' in value or '/' in value and value.endswith(('.png','.webp','.js','.ogg','.json')):
+        return None
+    if not re.search(r'[A-Za-zÀ-ÿ]', value): return None
+    if value.count('{')+value.count('}') > 0: return None
+    if not (SPANISH_WORDS.search(value) or re.search(r'[áéíóúñ¿¡]', value, re.I)):
+        return None
+    return re.sub(r'\s+', ' ', value)
+
+def _ui_dictionary_keys():
+    """Conservative key extraction from our own JS translations for reporting."""
+    data = (ROOT/'private-zh-tw.js').read_text(encoding='utf8')
+    pair = re.compile(r"(['\"])([^\r\n'\"\\]{2,170})\1\s*:\s*(['\"])([^\r\n'\"\\]{1,220})\3")
+    return {m.group(2) for m in pair.finditer(data)}
+
+def audit_static_text(official_terms):
+    """Inventory probable untranslated source literals. Not a translation-rate metric."""
+    terms = set(_ui_dictionary_keys())
+    for names in official_terms.values(): terms.update(names)
+    for names in LOCAL_GAME_NAMES.values(): terms.update(names)
+    results = {}
+    def category_for(path):
+        name = path.name.lower()
+        if 'move' in name or 'skill' in name: return 'moves_and_skills'
+        if 'abilit' in name or 'passiv' in name: return 'abilities_and_passives'
+        if 'item' in name or 'equip' in name or 'upgrade' in name: return 'items_and_upgrades'
+        if any(k in name for k in ('mission','quest','achievement','daily','weekly')): return 'quests_and_achievements'
+        if 'battle' in name or 'run' in name or 'combat' in name: return 'battle_and_leveling'
+        return 'interface_and_other'
+    for path in sorted((ROOT/'js').rglob('*.js')):
+        if path.name.endswith('.min.js') or 'vendor' in path.parts: continue
+        if path.stat().st_size > 900_000: continue
+        rel = path.relative_to(ROOT).as_posix()
+        if rel.startswith('js/data/pokedex'): continue  # 966 species already mapped
+        raw = path.read_text(encoding='utf8', errors='replace')
+        bucket = category_for(path)
+        found = {}
+        # Search field-value strings in data modules and likely Spanish UI literals.
+        for match in TEXT_FIELD.finditer(raw):
+            val = _candidate_text(match.group(2))
+            if val: found.setdefault(val, 'field_value')
+        if '/ui/' in rel or '/systems/' in rel:
+            for match in UI_STRING.finditer(raw):
+                val = _candidate_text(match.group(2))
+                if val: found.setdefault(val, 'interface_literal')
+        # DOM-heavy screens often assemble visible text inside JS template HTML.
+        # Report those literals without editing or executing any game code.
+        if '/ui/' in rel or '/systems/' in rel:
+            for template in re.finditer(r'`([^`]{10,6000})`', raw, re.DOTALL):
+                if '<' not in template.group(1): continue
+                for part in re.finditer(r'>([^<>]{6,240})<', template.group(1)):
+                    val = _candidate_text(part.group(1))
+                    if val: found.setdefault(val, 'html_template_text')
+        for val, kind in found.items():
+            key=(bucket,val)
+            if key not in results:
+                results[key]={'category':bucket,'text':val,'source_file':rel,
+                              'kind':kind,'status':'already_matched' if val in terms else 'needs_review'}
+    # Initial static HTML can contain text outside JavaScript modules.
+    html_file = ROOT/'dev.html'
+    if html_file.is_file():
+        html = html_file.read_text(encoding='utf8', errors='replace')
+        html = re.sub(r'<script\b[^>]*>.*?</script>', '', html, flags=re.DOTALL|re.I)
+        for match in re.finditer(r'>([^<>]{6,260})<', html):
+            val = _candidate_text(match.group(1))
+            if val:
+                key=('interface_and_other',val)
+                if key not in results:
+                    results[key]={'category':'interface_and_other','text':val,'source_file':'dev.html',
+                                  'kind':'html_static_text','status':'already_matched' if val in terms else 'needs_review'}
+    items = sorted(results.values(), key=lambda x:(x['category'],x['status'],x['text'].casefold()))
+    by_category={}
+    for item in items:
+        rec=by_category.setdefault(item['category'],{'detected':0,'already_matched':0,'needs_review':0})
+        rec['detected']+=1
+        rec[item['status']]+=1
+    return {'detected_static_literals':len(items),
+            'recognized_in_dictionary':sum(x['status']=='already_matched' for x in items),
+            'remaining_for_manual_review':sum(x['status']=='needs_review' for x in items),
+            'by_category':by_category,
+            'caveat':'靜態字串啟發式掃描，並非完整覆蓋率。可能有偽陽性、HTML 模板或執行時產生的文字未納入。'}, items
 
 def audit_source_names(terms):
     # Report *potential* unpaired names, not a promise of 100% coverage.
@@ -129,11 +252,15 @@ def audit_source_names(terms):
             for match in re.finditer(r"(?:[\"']?)(?:name|nombre)[\"']?\s*:\s*([\"'])(.{2,100}?)\1", raw):
                 value = match.group(2).strip()
                 if value and not re.search(r'[$\{\}\n\r]', value): names.add(value)
-        translated = sorted(v for v in names if v in terms[category])
-        missing = sorted(v for v in names if v not in terms[category])
+        official = sorted(v for v in names if v in terms[category])
+        local = sorted(v for v in names if v not in terms[category] and v in LOCAL_GAME_NAMES[category])
+        missing = sorted(v for v in names if v not in terms[category] and v not in LOCAL_GAME_NAMES[category])
+        translated = official + local
         reports[category] = {
             'detected_source_names': len(names),
             'matched_source_names': len(translated),
+            'matched_official': len(official),
+            'matched_local_overrides': len(local),
             'unmatched_source_names': missing[:500],
             'note': '僅掃描已存在資料檔的 name/nombre 字面值，非完整遊戲翻譯率。'
         }
@@ -146,7 +273,7 @@ def build():
     if not (ROOT / 'private-cheats.js').is_file():
         raise SystemExit('缺少 private-cheats.js')
     if not (ROOT / 'private-zh-tw.js').is_file():
-        raise SystemExit('缺少 private-zh-tw.js：V2.5 需有此檔案')
+        raise SystemExit('缺少 private-zh-tw.js：V2.6 需有此檔案')
     dev = devpath.read_text(encoding='utf-8')
     a, b = dev.find(BEGIN), dev.find(END)
     if a < 0 or b < a:
@@ -160,6 +287,7 @@ def build():
     dex_zh = build_dex_chinese_map()
     terms_zh, term_stats = build_game_terms()
     source_audit = audit_source_names(terms_zh)
+    text_audit, text_todo = audit_static_text(terms_zh)
     if SITE.exists(): shutil.rmtree(SITE)
     SITE.mkdir(parents=True)
     # All sprites remain in the private fork. Credits/licenses must be retained.
@@ -178,8 +306,9 @@ def build():
             output_js.append('/* Force permanently LOCAL database mode */\nG.FIREBASE_CONFIG = null;')
             output_js.append('/* Private features */\n' + (ROOT/'private-cheats.js').read_text('utf-8'))
             output_js.append('/* Full national dex Traditional Chinese names (baked at build-time) */\n' + 'globalThis.PS_PRIVATE_DEX_ZH = Object.freeze(' + json.dumps(dex_zh, ensure_ascii=False, separators=(',', ':')) + ');')
-            output_js.append('/* Official PokéAPI localized move/ability/item names (V2.5 build time; no runtime fetch) */\n' + 'globalThis.PS_PRIVATE_TERMS_ZH = Object.freeze(' + json.dumps(terms_zh, ensure_ascii=False, separators=(',', ':')) + ');')
-            output_js.append('/* Traditional Chinese UI overlay (V2.5 terms and dex) */\n' + (ROOT/'private-zh-tw.js').read_text('utf-8'))
+            output_js.append('/* Official PokéAPI localized move/ability/item names (V2.6 build time; no runtime fetch) */\n' + 'globalThis.PS_PRIVATE_TERMS_ZH = Object.freeze(' + json.dumps(terms_zh, ensure_ascii=False, separators=(',', ':')) + ');')
+            output_js.append('/* Verified local names for missing terms */\n' + 'globalThis.PS_PRIVATE_GAME_NAMES_ZH = Object.freeze(' + json.dumps(LOCAL_GAME_NAMES, ensure_ascii=False, separators=(',', ':')) + ');')
+            output_js.append('/* Traditional Chinese UI overlay (V2.6 terms and dex) */\n' + (ROOT/'private-zh-tw.js').read_text('utf-8'))
         path = ROOT / name
         if not path.exists():
             raise SystemExit('缺少上游檔案 ' + name)
@@ -187,7 +316,7 @@ def build():
     (SITE/'js').mkdir(exist_ok=True)
     (SITE/'js'/'private-game.js').write_text('\n;\n'.join(output_js)+'\n', encoding='utf-8')
 
-    html = dev[:a] + '<script defer src="js/private-game.js?v=private-v2-5"></script>' + dev[b+len(END):]
+    html = dev[:a] + '<script defer src="js/private-game.js?v=private-v2-6"></script>' + dev[b+len(END):]
     # Use the source Spanish text as stable keys for the local overlay.
     # This only changes the private site origin; the original game is unaffected.
     html = html.replace('</head>', '<script>try{localStorage.setItem("ps.lang","es")}catch(_){}</script></head>', 1)
@@ -207,17 +336,27 @@ def build():
     manifest.update(name='PokéSurvivor 私人版', short_name='PS私人版',
                     description='非官方、個人非商業用 iPhone 本機金手指修改版', lang='zh-TW')
     (SITE/'manifest.webmanifest').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
-    (SITE/'version.json').write_text(json.dumps({'v':'private-v2.5','private':True}), encoding='utf-8')
+    (SITE/'version.json').write_text(json.dumps({'v':'private-v2.6','private':True}), encoding='utf-8')
     (SITE/'translation-report.json').write_text(json.dumps({
-        'version': 'private-v2.5',
+        'version': 'private-v2.6',
         'pokemon_names': len(dex_zh),
         'official_name_tables': term_stats,
         'source_name_audit': source_audit,
+        'local_name_overrides': {k: len(v) for k,v in LOCAL_GAME_NAMES.items()},
+        'static_text_audit': text_audit,
+        'translation_todo_url': 'translation-todo.json',
         'limitations': [
-            '僅姓名欄位與直接可辨識的文字對照；特殊招式、特性、裝備名可能無法匹配。',
-            '遊戲自行撰寫的技能效果、裝備描述、任務與成就文字仍非完整翻譯。',
-            'name/nombre 稽核是啟發式比對，不代表總遊戲文字覆蓋率。'
+            '保留 V2.5 官方名稱對照；新增 14 個確認的遊戲專用名稱，但不是全部名稱。',
+            'V2.6 額外掃描遊戲原始碼的疑似西班牙文敘述並列於 translation-todo.json；報告並未自動將其翻譯。',
+            '所有稽核均為啟發式，不代表總遊戲文字覆蓋率；動態組合文字可能未列入。'
         ]
+    }, ensure_ascii=False, indent=2), encoding='utf-8')
+
+    (SITE/'translation-todo.json').write_text(json.dumps({
+        'version': 'private-v2.6',
+        'summary': text_audit,
+        'entries': [x for x in text_todo if x['status'] == 'needs_review'],
+        'notice': '這是來自公開遊戲原始碼的待檢查清單，並非已自動翻譯的文字。'
     }, ensure_ascii=False, indent=2), encoding='utf-8')
 
     # Keep upstream fetch cache strategy and eagerly cache our ENTIRE core executable.
@@ -227,11 +366,11 @@ def build():
         raise SystemExit('上游 sw.js 已變更，請重新檢查離線預載邏輯。')
     sw = sw.replace(original,
           "['./', './index.html', './css/style.css', './manifest.webmanifest', './js/private-game.js']")
-    sw = sw.replace("'ps-code-v1'", "'ps-private-code-v2-5'").replace("'ps-art-v1'", "'ps-private-art-v1'")
+    sw = sw.replace("'ps-code-v1'", "'ps-private-code-v2-6'").replace("'ps-art-v1'", "'ps-private-art-v1'")
     (SITE/'sw.js').write_text(sw, encoding='utf-8')
-    print('私人版 V2.5 建置完成：' + str(SITE))
-    print('包含 V2.0 金手指、本機存檔及 V2.5 一次產生寶可夢、招式、特性及道具中文名稱與動態文字刷新，保留原作者授權署名。')
-    print('注意：官方技能／特性／道具名稱會自動比對；原創名稱、效果描述、任務與成就仍可能未翻譯。')
+    print('私人版 V2.6 建置完成：' + str(SITE))
+    print('保留原本金手指與本機存檔；新增 14 個名稱的覆蓋及原始碼待翻譯清單 translation-todo.json。')
+    print('注意：效果描述、任務、成就仍非全部中文化；詳見 translation-todo.json。')
     print('警告：未預先快取的全部精靈圖片，離線時不保證可顯示。')
 
 if __name__ == '__main__': build()
