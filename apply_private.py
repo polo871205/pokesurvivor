@@ -52,7 +52,7 @@ def build_dex_chinese_map():
     print(f'寶可夢繁中名稱比對：{len(result)}/{len(dex_by_id)} 筆；缺漏 0。')
     return result
 
-# V2.7: official move / ability / item names. We do not rewrite gameplay
+# V2.8: official move / ability / item names. We do not rewrite gameplay
 # variables or source names; all mappings are used by the UI-only overlay.
 POKEAPI_CSV_BASE = 'https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv/'
 TERM_TABLES = {
@@ -103,14 +103,14 @@ def build_game_terms():
         try:
             rows = _download_csv(POKEAPI_CSV_BASE + csv_name)
         except Exception as exc:
-            raise SystemExit(f'V2.7 無法取得 {csv_name}，為避免缺漏而停止部署：{exc}')
+            raise SystemExit(f'V2.8 無法取得 {csv_name}，為避免缺漏而停止部署：{exc}')
         terms, stats = _terms_from_rows(rows, id_field)
         # A zero-name result indicates a schema change or upstream outage.
         if len(terms) < 10:
-            raise SystemExit(f'V2.7 {csv_name} 缺少有效的繁中對照，停止部署（{len(terms)} 筆）')
+            raise SystemExit(f'V2.8 {csv_name} 缺少有效的繁中對照，停止部署（{len(terms)} 筆）')
         combined[group] = terms
         report[group] = stats
-        print(f'V2.7 {group}: {stats["localized_entries"]} 個繁中名稱、{stats["name_pairs"]} 組西文/英文對照，跳過 {stats["ambiguous_names_skipped"]} 個衝突名稱')
+        print(f'V2.8 {group}: {stats["localized_entries"]} 個繁中名稱、{stats["name_pairs"]} 組西文/英文對照，跳過 {stats["ambiguous_names_skipped"]} 個衝突名稱')
     return combined, report
 
 # Manually reviewed names that are absent from the downloaded name CSVs, or
@@ -174,11 +174,11 @@ def audit_static_text(official_terms):
     terms = set(_ui_dictionary_keys())
     for names in official_terms.values(): terms.update(names)
     for names in LOCAL_GAME_NAMES.values(): terms.update(names)
-    # Parse the exact literal keys reviewed by the V2.7 display layer.
+    # Parse the exact literal keys reviewed by the V2.8 display layer.
     # No extra files are required in the GitHub upload.
     localized = (ROOT / 'private-zh-tw.js').read_text(encoding='utf8')
     match = re.search(r'const reviewedTextsV27 = (\{.*?\});\n', localized, flags=re.DOTALL)
-    if not match: raise SystemExit('找不到 V2.7 人工校對翻譯字典，停止部署。')
+    if not match: raise SystemExit('找不到 V2.8 人工校對翻譯字典，停止部署。')
     reviewed = json.loads(match.group(1))
     terms.update(reviewed)
     results = {}
@@ -244,6 +244,102 @@ def audit_static_text(official_terms):
             'v27_reviewed_count': len(reviewed),
             'caveat':'靜態字串啟發式掃描，並非完整覆蓋率。可能有偽陽性、HTML 模板或執行時產生的文字未納入。'}, items
 
+
+# V2.8: broad source inventory. This deliberately reports uncertain text
+# instead of automatically translating source strings or modifying gameplay.
+# Every JS file in ./js and the entry HTML is scanned. Regex-based discovery
+# cannot promise to catch all runtime concatenations, generated UI or assets.
+def audit_v28_broad_text(official_terms):
+    from html.parser import HTMLParser
+
+    class VisibleHTML(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.parts = []
+            self.hidden = 0
+        def handle_starttag(self, tag, attrs):
+            if tag in ('script', 'style', 'noscript'):
+                self.hidden += 1
+            for key, value in attrs:
+                if key in ('title', 'aria-label', 'alt', 'placeholder') and value:
+                    self.parts.append((value, f'attribute:{key}'))
+        def handle_endtag(self, tag):
+            if tag in ('script', 'style', 'noscript') and self.hidden:
+                self.hidden -= 1
+        def handle_data(self, data):
+            if not self.hidden:
+                self.parts.append((data, 'html_visible'))
+
+    source_files = sorted((ROOT/'js').rglob('*.js'))
+    source_files = [p for p in source_files if p.is_file() and p.stat().st_size <= 900_000
+                    and not p.name.endswith('.min.js') and 'vendor' not in p.parts]
+    html_files = [p for p in (ROOT/'dev.html', ROOT/'index.html') if p.is_file()]
+    known = set(_ui_dictionary_keys())
+    for groups in (official_terms, LOCAL_GAME_NAMES):
+        for vals in groups.values(): known.update(vals)
+    js_local = (ROOT/'private-zh-tw.js').read_text('utf8')
+    match = re.search(r'const reviewedTextsV27 = (\{.*?\});\n', js_local, re.S)
+    if match: known.update(json.loads(match.group(1)))
+    # Limited matching: Spanish-looking strings, not JS identifiers or runtime code.
+    js_quoted = re.compile(r"""(?P<q>['"])(?P<t>(?:\\.|(?!\1)[^\\\r\n]){6,450})\1""")
+    js_template = re.compile(r'`([^`]{8,16000})`', re.S)
+    found = {}
+    def add(text, rel, context, line):
+        text = text.strip().replace('\\n',' ').replace('\\t',' ')
+        text = re.sub(r'\s+', ' ', text)
+        if not (7 <= len(text) <= 260): return
+        # Skip interpolation or JS source fragments; preserve them only in the
+        # original repository for developers to review manually.
+        if any(x in text for x in ('${','=>','classList','document.','return;','function(','localStorage')):
+            return
+        if text.startswith(('//','/*','<','{')): return
+        if not (SPANISH_WORDS.search(text) or re.search(r'[áéíóúñ¿¡]',text,re.I)):
+            return
+        if text.count(';') > 1 or text.count('{') > 0 or text.count('}') > 0: return
+        key = (rel,text)
+        if key not in found:
+            found[key] = {'text':text, 'source_file':rel, 'line':line,
+                          'context':context, 'status':'already_matched' if text in known else 'needs_review'}
+    for path in source_files:
+        rel = path.relative_to(ROOT).as_posix()
+        if 'pokedex' in rel.lower(): continue
+        content = path.read_text('utf8',errors='replace')
+        for m in js_quoted.finditer(content):
+            add(m.group('t'), rel, 'js_string', content.count('\n',0,m.start())+1)
+        for m in js_template.finditer(content):
+            # Dynamic placeholders are preserved as placeholders in a REPORT,
+            # never changed in the original executable.
+            template = re.sub(r'\$\{[^}]*\}', '[動態值]', m.group(1))
+            if '<' in template and '>' in template:
+                parser=VisibleHTML()
+                try: parser.feed(template)
+                except ValueError: continue
+                for text, context in parser.parts:
+                    add(text, rel, 'js_template_'+context, content.count('\n',0,m.start())+1)
+            elif len(template)<220:
+                add(template,rel,'js_template',content.count('\n',0,m.start())+1)
+    for path in html_files:
+        rel=path.relative_to(ROOT).as_posix()
+        parser=VisibleHTML()
+        content=path.read_text('utf8',errors='replace')
+        try: parser.feed(content)
+        except ValueError: continue
+        for text, context in parser.parts: add(text,rel,context,0)
+    entries=sorted(found.values(),key=lambda e:(e['status'],e['source_file'],e['text'].casefold()))
+    counts={}
+    for e in entries:
+        section=e['source_file']
+        c=counts.setdefault(section,{'detected':0,'matched':0,'needs_review':0})
+        c['detected']+=1
+        c['matched' if e['status']=='already_matched' else 'needs_review']+=1
+    stats={'scanned_js_files':len(source_files), 'scanned_html_files':len(html_files),
+           'detected_candidates':len(entries),
+           'already_matched':sum(e['status']=='already_matched' for e in entries),
+           'needs_review':sum(e['status']=='needs_review' for e in entries),
+           'by_source_file':counts,
+           'limitations':'廣域掃描為啟發式檢索，可能誤判、漏抓動態字串；筆數不能當成整個遊戲的翻譯完成率。'}
+    return stats, entries
+
 def audit_source_names(terms):
     # Report *potential* unpaired names, not a promise of 100% coverage.
     reports = {}
@@ -281,7 +377,7 @@ def build():
     if not (ROOT / 'private-cheats.js').is_file():
         raise SystemExit('缺少 private-cheats.js')
     if not (ROOT / 'private-zh-tw.js').is_file():
-        raise SystemExit('缺少 private-zh-tw.js：V2.7 需有此檔案')
+        raise SystemExit('缺少 private-zh-tw.js：V2.8 需有此檔案')
     dev = devpath.read_text(encoding='utf-8')
     a, b = dev.find(BEGIN), dev.find(END)
     if a < 0 or b < a:
@@ -296,6 +392,7 @@ def build():
     terms_zh, term_stats = build_game_terms()
     source_audit = audit_source_names(terms_zh)
     text_audit, text_todo = audit_static_text(terms_zh)
+    broad_audit, broad_items = audit_v28_broad_text(terms_zh)
     reviewed_count = text_audit.get('v27_reviewed_count', 0)
     if SITE.exists(): shutil.rmtree(SITE)
     SITE.mkdir(parents=True)
@@ -315,9 +412,9 @@ def build():
             output_js.append('/* Force permanently LOCAL database mode */\nG.FIREBASE_CONFIG = null;')
             output_js.append('/* Private features */\n' + (ROOT/'private-cheats.js').read_text('utf-8'))
             output_js.append('/* Full national dex Traditional Chinese names (baked at build-time) */\n' + 'globalThis.PS_PRIVATE_DEX_ZH = Object.freeze(' + json.dumps(dex_zh, ensure_ascii=False, separators=(',', ':')) + ');')
-            output_js.append('/* Official PokéAPI localized move/ability/item names (V2.7 build time; no runtime fetch) */\n' + 'globalThis.PS_PRIVATE_TERMS_ZH = Object.freeze(' + json.dumps(terms_zh, ensure_ascii=False, separators=(',', ':')) + ');')
+            output_js.append('/* Official PokéAPI localized move/ability/item names (V2.8 build time; no runtime fetch) */\n' + 'globalThis.PS_PRIVATE_TERMS_ZH = Object.freeze(' + json.dumps(terms_zh, ensure_ascii=False, separators=(',', ':')) + ');')
             output_js.append('/* Verified local names for missing terms */\n' + 'globalThis.PS_PRIVATE_GAME_NAMES_ZH = Object.freeze(' + json.dumps(LOCAL_GAME_NAMES, ensure_ascii=False, separators=(',', ':')) + ');')
-            output_js.append('/* Traditional Chinese UI overlay (V2.7 terms and dex) */\n' + (ROOT/'private-zh-tw.js').read_text('utf-8'))
+            output_js.append('/* Traditional Chinese UI overlay (V2.8 terms and dex) */\n' + (ROOT/'private-zh-tw.js').read_text('utf-8'))
         path = ROOT / name
         if not path.exists():
             raise SystemExit('缺少上游檔案 ' + name)
@@ -325,7 +422,7 @@ def build():
     (SITE/'js').mkdir(exist_ok=True)
     (SITE/'js'/'private-game.js').write_text('\n;\n'.join(output_js)+'\n', encoding='utf-8')
 
-    html = dev[:a] + '<script defer src="js/private-game.js?v=private-v2-7"></script>' + dev[b+len(END):]
+    html = dev[:a] + '<script defer src="js/private-game.js?v=private-v2-8"></script>' + dev[b+len(END):]
     # Use the source Spanish text as stable keys for the local overlay.
     # This only changes the private site origin; the original game is unaffected.
     html = html.replace('</head>', '<script>try{localStorage.setItem("ps.lang","es")}catch(_){}</script></head>', 1)
@@ -345,9 +442,9 @@ def build():
     manifest.update(name='PokéSurvivor 私人版', short_name='PS私人版',
                     description='非官方、個人非商業用 iPhone 本機金手指修改版', lang='zh-TW')
     (SITE/'manifest.webmanifest').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
-    (SITE/'version.json').write_text(json.dumps({'v':'private-v2.7','private':True}), encoding='utf-8')
+    (SITE/'version.json').write_text(json.dumps({'v':'private-v2.8','private':True}), encoding='utf-8')
     (SITE/'translation-report.json').write_text(json.dumps({
-        'version': 'private-v2.7',
+        'version': 'private-v2.8',
         'pokemon_names': len(dex_zh),
         'official_name_tables': term_stats,
         'source_name_audit': source_audit,
@@ -355,15 +452,24 @@ def build():
         'static_text_audit': text_audit,
         'translation_todo_url': 'translation-todo.json',
         'reviewed_v27_texts': reviewed_count,
+        'source_scan_v28': {k:v for k,v in broad_audit.items() if k != 'by_source_file'},
+        'source_scan_report': 'translation-v28-audit.json',
         'limitations': [
-            '保留 V2.5 官方名稱對照及 14 個遊戲專用名稱。V2.7 新增人工校對的靜態顯示文字，並非全部執行時文字。',
-            'V2.7 額外掃描遊戲原始碼的疑似西班牙文敘述並列於 translation-todo.json；報告並未自動將其翻譯。',
+            '保留 V2.5 官方名稱對照及 14 個遊戲專用名稱。V2.7 的 270 筆已審查翻譯繼續保留；V2.8 額外處理常見動態句型。',
+            'V2.8 另產生廣域原始碼掃描報告，未自動機翻不確定的內容。',
             '所有稽核均為啟發式，不代表總遊戲文字覆蓋率；動態組合文字可能未列入。'
         ]
     }, ensure_ascii=False, indent=2), encoding='utf-8')
 
+    (SITE/'translation-v28-audit.json').write_text(json.dumps({
+        'version':'private-v2.8',
+        'summary':broad_audit,
+        'entries':broad_items,
+        'notice':'僅包含公開原始碼中可能顯示的字串，不含個人存檔或帳號。請不要將檢測數量當成翻譯完成率。'
+    }, ensure_ascii=False, indent=2),encoding='utf8')
+
     (SITE/'translation-todo.json').write_text(json.dumps({
-        'version': 'private-v2.7',
+        'version': 'private-v2.8',
         'summary': text_audit,
         'entries': [x for x in text_todo if x['status'] == 'needs_review'],
         'notice': '這是來自公開遊戲原始碼的待檢查清單，並非已自動翻譯的文字。'
@@ -376,10 +482,10 @@ def build():
         raise SystemExit('上游 sw.js 已變更，請重新檢查離線預載邏輯。')
     sw = sw.replace(original,
           "['./', './index.html', './css/style.css', './manifest.webmanifest', './js/private-game.js']")
-    sw = sw.replace("'ps-code-v1'", "'ps-private-code-v2-7'").replace("'ps-art-v1'", "'ps-private-art-v1'")
+    sw = sw.replace("'ps-code-v1'", "'ps-private-code-v2-8'").replace("'ps-art-v1'", "'ps-private-art-v1'")
     (SITE/'sw.js').write_text(sw, encoding='utf-8')
-    print('私人版 V2.7 建置完成：' + str(SITE))
-    print('保留原本金手指與本機存檔；新增 V2.7 人工校對的靜態文字對照及剩餘待翻譯清單。')
+    print('私人版 V2.8 建置完成：' + str(SITE))
+    print('保留原本金手指與本機存檔；保留 V2.7 靜態翻譯，新增 V2.8 動態句子對照、廣域程式掃描及剩餘待翻譯清單。')
     print('注意：部分效果描述、任務與成就已新增中文，但動態內容仍可能缺漏；詳見 translation-todo.json。')
     print('警告：未預先快取的全部精靈圖片，離線時不保證可顯示。')
 

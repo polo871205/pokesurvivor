@@ -1,5 +1,5 @@
 /*
- * PokéSurvivor PRIVATE Traditional Chinese UI layer — V2.7 (move, ability, item + Pokédex names via build-time mapping)
+ * PokéSurvivor PRIVATE Traditional Chinese UI layer — V2.8 (dynamic messages + offline untranslated-text audit)
  * Noncommercial derivative. Upstream game logic, save keys, data IDs stay unchanged.
  * This file translates only visible UI text and common proper names.
  * Species are mapped by Dex ID, moves/abilities/items by official localized names. Descriptions and quests remain partial.
@@ -678,6 +678,106 @@ const templated = [
     [/^(\d+(?:[.,]\d+)?)\s*vida\/s$/i, n => `${n} 生命／秒`]
   ];
 
+  // V2.8: Dynamic sentences assembled at run time. Restrict to specific
+  // complete UI messages; never rewrite game data or internal identifiers.
+  const dynamicV28 = [
+    [/^¡Has vencido a\s+(.+?)!?$/i, name => `你擊敗了${dict.get(name) || name}！`],
+    [/^¡Has llevado a\s+(.+?)\s+al nivel\s+(\d+)!?$/i, (name, lvl) => `你已將${dict.get(name) || name}升到 ${lvl} 級！`],
+    [/^¡Horda de tipo\s+(.+?)!$/i, type => `${dict.get(type) || type}屬性寶可夢大軍來襲！`],
+    [/^¡Logro:\s*(.+?)!?$/i, name => `獲得成就：${dict.get(name) || name}！`],
+    [/^Misión completada:\s*(.+)$/i, name => `任務完成：${dict.get(name) || name}`],
+    [/^¡Nivel\s+(\d+)!$/i, lvl => `升到 ${lvl} 級！`],
+    [/^Faltan por elegir:\s*(\d+)$/i, amount => `還需要選擇：${amount}`],
+    [/^Se lanzará a la vez que\s+(.+?)[.]?$/i, move => `會與「${dict.get(move.trim()) || move.trim()}」同時施放`],
+    [/^Elige qué movimiento se une a\s+(.+?)[.]?$/i, move => `選擇要與「${dict.get(move.trim()) || move.trim()}」組合的招式`],
+    [/^¿Con cuál unes\s+(.+?)\??$/i, move => `你要將「${dict.get(move.trim()) || move.trim()}」與哪個招式組合？`],
+    [/^Quedarme con\s+(.+?)$/i, name => `保留${dict.get(name.trim()) || name.trim()}`],
+    [/^Eres el anfitrión\. Invita a tus amigos \(hasta\s+(\d+)\)?\.?$/i, n => `你是房主。邀請好友加入（最多 ${n} 人）。`],
+    [/^Estás en la sala de\s+(.+?)[.]?$/i, who => `你位於${who}的房間`],
+    [/^¡Has ganado\s+([\d.,]+)\s+Pokémonedas!?$/i, n => `獲得 ${n} 寶可夢幣！`],
+    [/^Pokémonedas ganadas\s*[:：]?\s*([\d.,]+)$/i, n => `獲得寶可夢幣：${n}`],
+    [/^Recoge\s+(\d+)\s+premios?\s+en Misiones\.?$/i, n => `前往「任務」領取 ${n} 項獎勵。`],
+    [/^Ya tienes\s+(\d+)\s+Pokémon\.?$/i, n => `你已擁有 ${n} 隻寶可夢。`],
+    [/^Has vencido a\s+(.+?)[.!]?$/i, name => `你擊敗了${dict.get(name) || name}！`],
+    [/^¡(?:Un|Una)\s+(.+?)\s+salvaje apareció!$/i, name => `野生的${dict.get(name) || name}出現了！`],
+    [/^Tienes\s+(\d+)\s+de\s+(\d+)\s+Pokémon\.?$/i, (n,total) => `已擁有 ${n}／${total} 隻寶可夢。`],
+    [/^Nuevo récord de tiempo:\s*(.+?)!?$/i, time => `生存時間刷新紀錄：${time}！`],
+    [/^¡Hora dorada!\s*Doble de experiencia!?$/i, () => '黃金時刻！經驗值加倍！'],
+    [/^Aguanta\s+(\d+)\s+segundos?\s+en\s+una\s+run\.?$/i, n => `在單次冒險中存活 ${n} 秒。`],
+    [/^Gana\s+(\d+)\s+Pokémonedas?\.?$/i, n => `獲得 ${n} 寶可夢幣。`],
+    [/^Derrota\s+(\d+)\s+enemigos?\.?$/i, n => `擊敗 ${n} 名敵人。`],
+    [/^Sube\s+(\d+)\s+niveles?\.?$/i, n => `提升 ${n} 個等級。`],
+    [/^Has conseguido\s+(\d+)\s+tickets?\.?$/i, n => `取得 ${n} 張抽卡券。`],
+  ];
+  // UI-only spelling/space normalization. Collisions are omitted rather than
+  // guessing among two unlike names or descriptions.
+  const normalizedPairs = new Map();
+  const collisions = new Set();
+  const normalizeVisible = value => value.normalize('NFKC').replace(/[\u00a0\u2009\u200b]/g,' ').replace(/\s+/g,' ').trim();
+  for (const [key,value] of dict) {
+    if (key.length < 4) continue;
+    const n = normalizeVisible(key);
+    if (normalizedPairs.has(n) && normalizedPairs.get(n) !== value) collisions.add(n);
+    else normalizedPairs.set(n,value);
+  }
+  for (const n of collisions) normalizedPairs.delete(n);
+  // Collect only likely untranslated Spanish *on-screen UI text* in RAM.
+  // Never send anything to a server or modify game progress / storage.
+  const pending = new Map();
+  let translatedRuntimeNodes = 0;
+  const spanishCue = /\b(?:los|las|del|para|porque|cuando|tienes|puedes|obtén|consigue|recupera|movimiento|movimientos|vida|daño|enemigos|recompensa|misión|has|estás|elige|aumenta|reduce|sobrevive|derrota|durante|hasta|todos|nivel|tiempo|ahora|más|sin|que|con)\b/i;
+  function recordPending(raw, element) {
+    if (!element || element.closest('#private-cheats-panel,#ps-translation-audit-tools,input,textarea,select,[contenteditable="true"],script,style,code,pre')) return;
+    // Avoid input / personal profile / chat / friends / leaderboard text.
+    if (element.closest('#scr-social,#scr-ranking,#scr-login,#scr-profile,#scr-account,#scr-friends,[data-private]')) return;
+    const core = String(raw||'').replace(/\s+/g,' ').trim();
+    if (core.length < 10 || core.length > 220 || !/[A-Za-zÀ-ÿ]/.test(core)) return;
+    if (!spanishCue.test(core) && !/[¿¡]/.test(core)) return;
+    if (/\b(?:@|https?:\/\/|localStorage|function|return|classList|addEventListener)\b/i.test(core) || /[{}<>]|=>|\/\//.test(core)) return;
+    // Do not keep email-like or other obvious account identifiers.
+    if (/@|\b\d{7,}\b/.test(core)) return;
+    const current = pending.get(core);
+    if (current) { if (current.seen < 3) current.seen++; return; }
+    if (pending.size >= 400) return;
+    pending.set(core, { text:core, seen:1 });
+  }
+  function exportPending() {
+    const report = { version:'private-v2.8', source:'current-iPhone-screen',
+      generated_at:new Date().toISOString(),
+      warning:'僅蒐集本次開啟遊戲時看過的疑似西班牙文。分享前請檢查是否包含暱稱或其他個人資訊。',
+      distinct_untranslated_suspects:pending.size,
+      entries:Array.from(pending.values()).sort((a,b)=>a.text.localeCompare(b.text)) };
+    const file = new Blob([JSON.stringify(report,null,2)], {type:'application/json'});
+    const url = URL.createObjectURL(file);
+    const link = document.createElement('a');
+    link.href = url; link.download = 'PokeSurvivor_V2.8_待翻譯畫面.json';
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+    return report;
+  }
+  function attachAuditTools() {
+    const settings = document.getElementById('scr-settings');
+    if (!settings || settings.querySelector('#ps-translation-audit-tools')) return;
+    const container = document.createElement('div');
+    container.id = 'ps-translation-audit-tools';
+    container.style.cssText = 'margin:14px auto;padding:12px;max-width:520px;border:1px solid #7776;border-radius:10px;text-align:center;box-sizing:border-box;';
+    const label = document.createElement('div');
+    label.textContent = '私人版 V2.8・繁體中文檢查';
+    label.style.cssText='font-weight:700;margin-bottom:6px;';
+    const info=document.createElement('div');
+    info.className='ps-translation-audit-count';
+    info.textContent='尚未偵測到待檢查文字';
+    info.style.cssText='font-size:12px;opacity:.85;margin-bottom:8px;';
+    const btn = document.createElement('button');
+    btn.type='button'; btn.textContent='下載待翻譯畫面 JSON';
+    btn.style.cssText='padding:8px 14px;border-radius:8px;background:#ffe38d;color:#252525;cursor:pointer;';
+    btn.addEventListener('click',evt=>{evt.preventDefault();evt.stopPropagation();exportPending();});
+    const note = document.createElement('div');
+    note.textContent='只檢查本機畫面，不連線、不讀取存檔；分享檔案前請先檢查內容。';
+    note.style.cssText='font-size:11px;opacity:.75;margin-top:8px;';
+    container.append(label, info, btn, note);
+    settings.appendChild(container);
+  }
   function translate(raw) {
     if (typeof raw !== 'string') return raw;
     const m = /^(\s*)([\s\S]*?)(\s*)$/.exec(raw);
@@ -685,6 +785,9 @@ const templated = [
     const core = m[2];
     const direct = dict.get(core);
     if (direct) return m[1] + direct + m[3];
+    // Previously reviewed Spanish strings can appear with altered spacing.
+    const normalized = normalizedPairs.get(normalizeVisible(core));
+    if (normalized) return m[1] + normalized + m[3];
     // Translate the move/ability/item NAME in a combined label, while
     // preserving numeric values and the game's custom effect descriptions.
     const combo = /^([^·|\n]{2,80}?)(\s*[·|]\s*)([^\n]{1,170})$/.exec(core);
@@ -722,19 +825,24 @@ const templated = [
     // Partial label before a nested count/keyboard hint. Deliberately NOT a
     // global free-text replacement; protects nicknames and game data IDs.
     if (/^Tirar ×(1|10) ·\s*$/.test(core)) return m[1] + core.replace('Tirar ×1', '單抽 ×1').replace('Tirar ×10', '十連抽 ×10') + m[3];
+    for (const [rx, fn] of dynamicV28) {
+      const matched = core.match(rx);
+      if (matched) return m[1] + fn(...matched.slice(1)) + m[3];
+    }
     return raw;
   }
 
   function update(root) {
     if (!root) return;
     // No changes to game values/IDs and no writes to IndexedDB/localStorage.
-    const skip = el => el.closest && el.closest('script,style,code,textarea,[contenteditable="true"],#private-cheats-panel');
+    const skip = el => el.closest && el.closest('script,style,code,textarea,[contenteditable="true"],#private-cheats-panel,#ps-translation-audit-tools');
     if (root.nodeType === 3) {
       if (skip(root.parentElement)) return;
       const old = root.nodeValue;
       if (old && old.length < 350) {
         const next = translate(old);
-        if (next !== old) root.nodeValue = next;
+        if (next !== old) { root.nodeValue = next; translatedRuntimeNodes++; }
+        else recordPending(old, root.parentElement);
       }
       return;
     }
@@ -757,7 +865,8 @@ const templated = [
         const old = node.nodeValue;
         if (old && old.length < 350) {
           const next = translate(old);
-          if (next !== old) node.nodeValue = next;
+          if (next !== old) { node.nodeValue = next; translatedRuntimeNodes++; }
+          else recordPending(old, node.parentElement);
         }
       } else if (node.matches && node.matches('input,button,[title],[aria-label]') && !skip(node)) {
         for (const attr of ['placeholder', 'title', 'aria-label']) {
@@ -777,6 +886,7 @@ const templated = [
     css.textContent = 'body,button,input,select,textarea{font-family:"PingFang TC","Microsoft JhengHei",sans-serif !important} .menu-item{line-height:1.35}';
     document.head.appendChild(css);
     update(document.body);
+    attachAuditTools();
     const tasks = new Set();
     let scheduled = false;
     function flush() {
@@ -797,6 +907,9 @@ const templated = [
     // gameplay state, IDs, storage or the gold/EXP calculations.
     setInterval(() => {
       if (document.visibilityState === 'hidden') return;
+      attachAuditTools();
+      const countLabel = document.querySelector('#ps-translation-audit-tools .ps-translation-audit-count');
+      if (countLabel) countLabel.textContent = `本次畫面疑似漏翻：${pending.size} 項`;
       const panels = document.querySelectorAll('section.scr:not(.hidden), #set-body, #topbar:not(.hidden)');
       if (!panels.length) { update(document.body); return; }
       for (const panel of panels) update(panel);
@@ -812,5 +925,5 @@ const templated = [
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
     else start();
   }
-  if (typeof globalThis !== 'undefined') globalThis.PSPrivateZH = Object.freeze({ translate, count: dict.size, dexNamesAdded, officialTermsAdded, version: '2.7' });
+  if (typeof globalThis !== 'undefined') globalThis.PSPrivateZH = Object.freeze({ translate, count: dict.size, dexNamesAdded, officialTermsAdded, version: '2.8', exportPending, scanPage: () => { if (typeof document !== 'undefined') update(document.body); return pending.size; }, getAuditSummary: () => ({pending:pending.size, translatedRuntimeNodes}) });
 })();
