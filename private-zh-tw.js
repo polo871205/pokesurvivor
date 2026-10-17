@@ -1,8 +1,8 @@
 /*
- * PokéSurvivor PRIVATE Traditional Chinese UI layer — V2.4 (all Pokédex names via build-time PokéAPI mapping)
+ * PokéSurvivor PRIVATE Traditional Chinese UI layer — V2.5 (move, ability, item + Pokédex names via build-time mapping)
  * Noncommercial derivative. Upstream game logic, save keys, data IDs stay unchanged.
  * This file translates only visible UI text and common proper names.
- * Names are mapped by National Dex number; move and quest translations remain partial.
+ * Species are mapped by Dex ID, moves/abilities/items by official localized names. Descriptions and quests remain partial.
  */
 (() => {
   'use strict';
@@ -328,6 +328,47 @@ for (const pokemon of gameDex) {
     dexNamesAdded += 1;
   }
 }
+// Official localized terms are inserted by the V2.5 GitHub build. Merge
+// by exact display name only. Never modify G.MOVES, G.DEX, IDs or save keys.
+const officialTerms = (typeof globalThis !== 'undefined' && globalThis.PS_PRIVATE_TERMS_ZH) || {};
+const knownTermNames = new Set();
+let officialTermsAdded = 0;
+for (const category of ['moves', 'abilities', 'items']) {
+  const localized = officialTerms[category] || {};
+  for (const [original, translated] of Object.entries(localized)) {
+    if (!original || typeof translated !== 'string' || !translated.trim()) continue;
+    knownTermNames.add(original);
+    if (!dict.has(original)) { dict.set(original, translated); officialTermsAdded++; }
+  }
+}
+// Game-specific labels: these are UI words, not simulation variables.
+const extraLabels = {
+  'Movimientos': '招式', 'Movimiento': '招式', 'Movimiento nuevo': '新招式',
+  'Movimiento aprendido': '已學會招式', 'Aprender': '學習', 'Aprendido': '已學會',
+  'Elegir movimiento': '選擇招式', 'Elegir mejora': '選擇強化',
+  'Habilidades': '特性', 'Habilidad': '特性', 'Habilidad pasiva': '被動特性',
+  'Objetos': '道具', 'Objeto': '道具', 'Objeto equipable': '可裝備道具',
+  'Equipado': '已裝備', 'Equipar': '裝備', 'Desequipar': '卸下',
+  'Daño': '傷害', 'Potencia': '威力', 'Precisión': '命中率',
+  'Probabilidad': '機率', 'Duración': '持續時間', 'Alcance': '範圍',
+  'Recarga': '冷卻', 'Segundos': '秒', 'Segundo': '秒',
+  'Efecto': '效果', 'Efectos': '效果', 'Pasiva': '被動',
+  'Físico': '物理', 'Especial': '特殊', 'Estado': '變化',
+  'Debilidad': '弱點', 'Resistencia': '抗性',
+  'Recompensa': '獎勵', 'Recompensas': '獎勵',
+  'Progreso': '進度', 'Completa': '完成', 'Completado': '已完成',
+  'Mejora obtenida': '獲得強化', 'Subir de nivel': '升級',
+  'Daño crítico': '暴擊傷害', 'Golpe crítico': '暴擊',
+  'Velocidad de movimiento': '移動速度', 'Velocidad de ataque': '攻擊速度',
+  'Tiempo de recarga': '冷卻時間', 'Salud': '生命值',
+  'Ataque': '攻擊', 'Defensa': '防禦', 'Experiencia': '經驗值',
+  'Tiempo': '時間', 'Puntos': '點數', 'Racha': '連勝',
+  'Rareza': '稀有度', 'Tipo': '屬性', 'Categoría': '分類',
+  'Evolución': '進化', 'Evolucionar': '進化',
+  'Mis recompensas': '我的獎勵', 'Nuevo': '新增', 'Nueva': '新增',
+  'Bloqueado': '尚未解鎖', 'Desbloqueado': '已解鎖'
+};
+for (const [source, target] of Object.entries(extraLabels)) if (!dict.has(source)) dict.set(source, target);
 const templated = [
 
     [/^¡Nivel\s+(\d+)！?$/i, n => `等級 ${n}！`],
@@ -360,6 +401,13 @@ const templated = [
     const core = m[2];
     const direct = dict.get(core);
     if (direct) return m[1] + direct + m[3];
+    // Translate the move/ability/item NAME in a combined label, while
+    // preserving numeric values and the game's custom effect descriptions.
+    const combo = /^([^·|\n]{2,80}?)(\s*[·|]\s*)([^\n]{1,170})$/.exec(core);
+    if (combo && knownTermNames.has(combo[1].trim()) && dict.has(combo[1].trim())) {
+      const tail = dict.get(combo[3].trim()) || combo[3];
+      return m[1] + dict.get(combo[1].trim()) + combo[2] + tail + m[3];
+    }
     for (const [rx, fmt] of templated) {
       const match = core.match(rx);
       if (match) return m[1] + fmt(...match.slice(1)) + m[3];
@@ -466,5 +514,5 @@ const templated = [
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
     else start();
   }
-  if (typeof globalThis !== 'undefined') globalThis.PSPrivateZH = Object.freeze({ translate, count: dict.size, dexNamesAdded, version: '2.4' });
+  if (typeof globalThis !== 'undefined') globalThis.PSPrivateZH = Object.freeze({ translate, count: dict.size, dexNamesAdded, officialTermsAdded, version: '2.5' });
 })();
