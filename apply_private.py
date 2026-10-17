@@ -422,7 +422,7 @@ def build():
     (SITE/'js').mkdir(exist_ok=True)
     (SITE/'js'/'private-game.js').write_text('\n;\n'.join(output_js)+'\n', encoding='utf-8')
 
-    html = dev[:a] + '<script defer src="js/private-game.js?v=private-v2-8"></script>' + dev[b+len(END):]
+    html = dev[:a] + '<script defer src="js/private-game.js?v=private-v2-9"></script>' + dev[b+len(END):]
     # Use the source Spanish text as stable keys for the local overlay.
     # This only changes the private site origin; the original game is unaffected.
     html = html.replace('</head>', '<script>try{localStorage.setItem("ps.lang","es")}catch(_){}</script></head>', 1)
@@ -442,9 +442,9 @@ def build():
     manifest.update(name='PokéSurvivor 私人版', short_name='PS私人版',
                     description='非官方、個人非商業用 iPhone 本機金手指修改版', lang='zh-TW')
     (SITE/'manifest.webmanifest').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
-    (SITE/'version.json').write_text(json.dumps({'v':'private-v2.8','private':True}), encoding='utf-8')
+    (SITE/'version.json').write_text(json.dumps({'v':'private-v2.9','private':True}), encoding='utf-8')
     (SITE/'translation-report.json').write_text(json.dumps({
-        'version': 'private-v2.8',
+        'version': 'private-v2.9',
         'pokemon_names': len(dex_zh),
         'official_name_tables': term_stats,
         'source_name_audit': source_audit,
@@ -453,23 +453,24 @@ def build():
         'translation_todo_url': 'translation-todo.json',
         'reviewed_v27_texts': reviewed_count,
         'source_scan_v28': {k:v for k,v in broad_audit.items() if k != 'by_source_file'},
-        'source_scan_report': 'translation-v28-audit.json',
+        'source_scan_report': 'translation-v29-audit.json',
+        'iphone_v28_screen_audit_patched': 6,
         'limitations': [
-            '保留 V2.5 官方名稱對照及 14 個遊戲專用名稱。V2.7 的 270 筆已審查翻譯繼續保留；V2.8 額外處理常見動態句型。',
+            '保留原有寶可夢、官方招式／特性／道具對照，以及 V2.7／V2.8 的翻譯；V2.9 新增 6 項 iPhone 畫面校對。',
             'V2.8 另產生廣域原始碼掃描報告，未自動機翻不確定的內容。',
             '所有稽核均為啟發式，不代表總遊戲文字覆蓋率；動態組合文字可能未列入。'
         ]
     }, ensure_ascii=False, indent=2), encoding='utf-8')
 
-    (SITE/'translation-v28-audit.json').write_text(json.dumps({
-        'version':'private-v2.8',
+    (SITE/'translation-v29-audit.json').write_text(json.dumps({
+        'version':'private-v2.9',
         'summary':broad_audit,
         'entries':broad_items,
         'notice':'僅包含公開原始碼中可能顯示的字串，不含個人存檔或帳號。請不要將檢測數量當成翻譯完成率。'
     }, ensure_ascii=False, indent=2),encoding='utf8')
 
     (SITE/'translation-todo.json').write_text(json.dumps({
-        'version': 'private-v2.8',
+        'version': 'private-v2.9',
         'summary': text_audit,
         'entries': [x for x in text_todo if x['status'] == 'needs_review'],
         'notice': '這是來自公開遊戲原始碼的待檢查清單，並非已自動翻譯的文字。'
@@ -482,10 +483,10 @@ def build():
         raise SystemExit('上游 sw.js 已變更，請重新檢查離線預載邏輯。')
     sw = sw.replace(original,
           "['./', './index.html', './css/style.css', './manifest.webmanifest', './js/private-game.js']")
-    sw = sw.replace("'ps-code-v1'", "'ps-private-code-v2-8'").replace("'ps-art-v1'", "'ps-private-art-v1'")
+    sw = sw.replace("'ps-code-v1'", "'ps-private-code-v2-9'").replace("'ps-art-v1'", "'ps-private-art-v1'")
     (SITE/'sw.js').write_text(sw, encoding='utf-8')
-    print('私人版 V2.8 建置完成：' + str(SITE))
-    print('保留原本金手指與本機存檔；保留 V2.7 靜態翻譯，新增 V2.8 動態句子對照、廣域程式掃描及剩餘待翻譯清單。')
+    print('私人版 V2.9 建置完成：' + str(SITE))
+    print('保留原本金手指與本機存檔；保留 V2.7／V2.8 翻譯、動態句型與掃描，再補齊 iPhone 匯出的 6 項 UI 漏翻。')
     print('注意：部分效果描述、任務與成就已新增中文，但動態內容仍可能缺漏；詳見 translation-todo.json。')
     print('警告：未預先快取的全部精靈圖片，離線時不保證可顯示。')
 

@@ -1,5 +1,5 @@
 /*
- * PokéSurvivor PRIVATE Traditional Chinese UI layer — V2.8 (dynamic messages + offline untranslated-text audit)
+ * PokéSurvivor PRIVATE Traditional Chinese UI layer — V2.9 (six screenshot-audited corrections; V2.8 features preserved)
  * Noncommercial derivative. Upstream game logic, save keys, data IDs stay unchanged.
  * This file translates only visible UI text and common proper names.
  * Species are mapped by Dex ID, moves/abilities/items by official localized names. Descriptions and quests remain partial.
@@ -590,7 +590,18 @@ const reviewedTextsV27 = {
   "Ten todos los Pokémon del juego.": "擁有遊戲中的全部寶可夢。",
   "Vence a todos los legendarios.": "擊敗所有傳說寶可夢。"
 };
-  const dict = new Map([...Object.entries(words), ...Object.entries(english), ...Object.entries(screenWords), ...Object.entries(screenWordsV23), ...Object.entries(reviewedTextsV27)]);
+  // V2.9: exact screen-text patches from the V2.8 iPhone audit export.
+  // No global string replacement; only standalone UI text nodes and attributes.
+  // Keep Nintendo / Creatures / GAME FREAK copyright attribution intact.
+  const screenWordsV29 = {
+    ": sin anuncios ni compras. Pokémon y sus personajes son propiedad de Nintendo, Creatures y GAME FREAK; este proyecto no está afiliado a ellos.": "：沒有廣告或遊戲內購。寶可夢及相關角色的權利歸 Nintendo、Creatures 與 GAME FREAK 所有；本專案與上述公司沒有隸屬或合作關係。",
+    "Datos de los Pokémon:": "寶可夢資料：",
+    "elegir carta al subir de nivel": "升級時選擇卡牌",
+    "la baja sola si el juego va a tirones (ahora: alta).": "若遊戲運作不順暢，會自動降低畫質（目前：高）。",
+    "Mejor nivel": "最高等級",
+    "Sin barras del navegador.": "不顯示瀏覽器工具列。"
+};
+  const dict = new Map([...Object.entries(words), ...Object.entries(english), ...Object.entries(screenWords), ...Object.entries(screenWordsV23), ...Object.entries(reviewedTextsV27), ...Object.entries(screenWordsV29)]);
 // Merge all source Pokédex names with their Taiwan Traditional Chinese names.
 // Critical: do not alter G.DEX itself, Pokémon IDs, save data, or asset filenames.
 const gameDex = (typeof G !== 'undefined' && Array.isArray(G.DEX)) ? G.DEX : [];
@@ -680,6 +691,7 @@ const templated = [
 
   // V2.8: Dynamic sentences assembled at run time. Restrict to specific
   // complete UI messages; never rewrite game data or internal identifiers.
+  const qualityV29 = /^la baja sola si el juego va a tirones \(ahora:\s*(alta|media|baja)\)\.$/i;
   const dynamicV28 = [
     [/^¡Has vencido a\s+(.+?)!?$/i, name => `你擊敗了${dict.get(name) || name}！`],
     [/^¡Has llevado a\s+(.+?)\s+al nivel\s+(\d+)!?$/i, (name, lvl) => `你已將${dict.get(name) || name}升到 ${lvl} 級！`],
@@ -742,7 +754,7 @@ const templated = [
     pending.set(core, { text:core, seen:1 });
   }
   function exportPending() {
-    const report = { version:'private-v2.8', source:'current-iPhone-screen',
+    const report = { version:'private-v2.9', source:'current-iPhone-screen',
       generated_at:new Date().toISOString(),
       warning:'僅蒐集本次開啟遊戲時看過的疑似西班牙文。分享前請檢查是否包含暱稱或其他個人資訊。',
       distinct_untranslated_suspects:pending.size,
@@ -750,7 +762,7 @@ const templated = [
     const file = new Blob([JSON.stringify(report,null,2)], {type:'application/json'});
     const url = URL.createObjectURL(file);
     const link = document.createElement('a');
-    link.href = url; link.download = 'PokeSurvivor_V2.8_待翻譯畫面.json';
+    link.href = url; link.download = 'PokeSurvivor_V2.9_待翻譯畫面.json';
     document.body.appendChild(link); link.click(); link.remove();
     setTimeout(()=>URL.revokeObjectURL(url),30000);
     return report;
@@ -762,7 +774,7 @@ const templated = [
     container.id = 'ps-translation-audit-tools';
     container.style.cssText = 'margin:14px auto;padding:12px;max-width:520px;border:1px solid #7776;border-radius:10px;text-align:center;box-sizing:border-box;';
     const label = document.createElement('div');
-    label.textContent = '私人版 V2.8・繁體中文檢查';
+    label.textContent = '私人版 V2.9・繁體中文檢查';
     label.style.cssText='font-weight:700;margin-bottom:6px;';
     const info=document.createElement('div');
     info.className='ps-translation-audit-count';
@@ -785,6 +797,11 @@ const templated = [
     const core = m[2];
     const direct = dict.get(core);
     if (direct) return m[1] + direct + m[3];
+    const quality = core.match(qualityV29);
+    if (quality) {
+      const level = {alta:'高', media:'中', baja:'低'}[quality[1].toLowerCase()];
+      return m[1] + `若遊戲運作不順暢，會自動降低畫質（目前：${level}）。` + m[3];
+    }
     // Previously reviewed Spanish strings can appear with altered spacing.
     const normalized = normalizedPairs.get(normalizeVisible(core));
     if (normalized) return m[1] + normalized + m[3];
@@ -925,5 +942,5 @@ const templated = [
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
     else start();
   }
-  if (typeof globalThis !== 'undefined') globalThis.PSPrivateZH = Object.freeze({ translate, count: dict.size, dexNamesAdded, officialTermsAdded, version: '2.8', exportPending, scanPage: () => { if (typeof document !== 'undefined') update(document.body); return pending.size; }, getAuditSummary: () => ({pending:pending.size, translatedRuntimeNodes}) });
+  if (typeof globalThis !== 'undefined') globalThis.PSPrivateZH = Object.freeze({ translate, count: dict.size, dexNamesAdded, officialTermsAdded, version: '2.9', exportPending, scanPage: () => { if (typeof document !== 'undefined') update(document.body); return pending.size; }, getAuditSummary: () => ({pending:pending.size, translatedRuntimeNodes}) });
 })();
